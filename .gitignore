@@ -1,0 +1,14 @@
+# Documentação gerada
+/docs
+
+# Arquivos compilados
+*.o
+*.elf
+*.iso
+
+# Diretório ISO temporário
+/iso/boot/kernel.elf
+
+# Logs do Bochs
+bochsout.txt
+
