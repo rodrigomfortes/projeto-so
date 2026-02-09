@@ -1,138 +1,97 @@
-# Kernel Minimalista x86 - The Little OS Book (Capítulos 2 e 3)
 
-Este projeto implementa um kernel minimalista x86 seguindo os capítulos 2 e 3 do "The Little OS Book".
+# 🧠 MiniOS Kernel: Estudo de Caso (Little OS Book)
 
-## Estrutura do Projeto
+Este projeto contém a implementação fundamental de um **Kernel x86**, desenvolvido seguindo os conceitos dos **Capítulos 1, 2 e 3** do livro *The Little OS Book*.
 
-```
-projeto-so/
-├── src/
-│   ├── loader.s      # Bootloader em Assembly (Cap 2 + Cap 3)
-│   ├── kmain.c       # Kernel principal em C (Cap 3)
-│   └── link.ld       # Linker script para mapeamento de memória
-├── iso/
-│   └── boot/
-│       └── grub/     # Estrutura para GRUB Legacy
-├── Makefile          # Automação de build
-├── bochsrc.txt       # Configuração do emulador Bochs
-└── README.md         # Este arquivo
-```
+O objetivo deste repositório não é apenas rodar um código, mas servir como material de estudo sobre **como um computador inicia**, como o hardware transfere o controle para o software e como preparamos o terreno para sair do Assembly e programar em C.
 
-## Pré-requisitos
+---
 
-### Ferramentas necessárias (no WSL Ubuntu):
+## 📚 Conceitos Fundamentais Abordados
 
-```bash
-sudo apt-get update
-sudo apt-get install build-essential nasm genisoimage bochs bochs-sdl qemu-system-x86 gcc-multilib
-```
+### 1. O Processo de Boot (Multiboot)
 
-### Obter o stage2_eltorito do GRUB Legacy
+Quando o computador liga, ele não sabe o que é C, Python ou Java. Ele executa instruções brutas da BIOS, que carrega um **Bootloader** (no nosso caso, o GRUB).
 
-O arquivo `stage2_eltorito` é necessário para criar a ISO bootável. Você pode obtê-lo de uma das seguintes formas:
+* **O Problema:** O GRUB não sabe onde está o nosso Kernel ou como carregá-lo.
+* **A Solução (Magic Numbers):** Implementamos um cabeçalho "Multiboot" no início do nosso arquivo Assembly (`loader.s`). São constantes hexadecimais específicas (`0x1BADB002`) que funcionam como uma assinatura, dizendo ao GRUB: *"Ei, eu sou um Kernel válido, me carregue na memória!"*.
 
-**Opção 1: Instalar o GRUB Legacy**
-```bash
-sudo apt-get install grub-legacy
-```
+### 2. A Necessidade da Stack (Pilha)
 
-**Opção 2: Baixar de um sistema com GRUB Legacy instalado**
+Este é o ponto crucial do **Capítulo 3**.
 
-O arquivo geralmente está em:
-- `/usr/lib/grub/i386-pc/stage2_eltorito`
-- `/usr/lib/grub-legacy/stage2_eltorito`
-- `/boot/grub/stage2_eltorito`
+* **O Problema:** A linguagem C depende pesadamente de uma estrutura de dados chamada **Stack** para gerenciar variáveis locais, chamadas de função e retornos. O hardware não cria isso sozinho.
+* **A Solução:** Antes de chamar a função `kmain` (nosso código C), precisamos reservar manualmente um bloco de memória no Assembly e apontar o registrador `ESP` (Stack Pointer) para o topo desse bloco. Sem isso, qualquer código C causaria um erro fatal (Triple Fault) imediato.
 
-**Opção 3: Copiar manualmente**
+### 3. Cross-Compilation (Compilação Cruzada)
 
-Se você tiver o arquivo de outra fonte, copie-o para:
-```bash
-cp /caminho/para/stage2_eltorito iso/boot/grub/
-```
+Nós estamos programando em um sistema moderno (Linux 64-bit), mas criando código para uma máquina "pelada" (Bare Metal 32-bit).
 
-## Como Compilar
+* Não podemos usar as bibliotecas padrão (`stdio.h`, `stdlib.h`), pois elas dependem de um Sistema Operacional (Linux/Windows) para funcionar. **Nós somos o Sistema Operacional.**
+* Por isso, usamos flags especiais no GCC (`-nostdlib`, `-fno-builtin`) para garantir que nosso código não tente chamar funções que não existem.
 
-### Capítulo 2: Kernel básico em Assembly
+---
 
-```bash
-make all        # Compilar o kernel
-make iso        # Criar a ISO bootável
-```
+## 📂 Arquitetura do Projeto
 
-### Capítulo 3: Adicionar código C
+Abaixo, a explicação de cada componente vital do sistema:
 
-Após implementar o Capítulo 3 (stack + kmain.c):
+### `src/loader.s` (O Porteiro)
 
-```bash
-make all        # Recompilar com código C
-make iso        # Recriar a ISO
-```
+Escrito em **Assembly (NASM)**. É o primeiro código a ser executado.
 
-## Como Executar
+1. Define o **Multiboot Header**.
+2. Reserva espaço para a **Kernel Stack** (seção `.bss`).
+3. Configura o Stack Pointer (`esp`).
+4. Chama a função externa `kmain` (Assembly -> C).
+5. Entra em loop infinito para impedir que o processador desligue.
 
-### No Bochs:
-```bash
-make run
-```
+### `src/kmain.c` (O Cérebro)
 
-### No QEMU:
-```bash
-make run-qemu
-```
+Escrito em **C (GCC)**.
+É onde a lógica do sistema operacional começa. Como não temos drivers de vídeo ainda, esta função apenas executa lógica interna.
 
-## Limpar arquivos gerados
+* *Curiosidade:* Funções simples como `printf` não existem aqui. Se quisermos escrever na tela, teremos que manipular diretamente a memória de vídeo (`0xB8000`) no futuro.
 
-```bash
-make clean
-```
+### `src/link.ld` (O Mapa)
 
-## Progresso
+Escrito em **Linker Script**.
+O compilador normalmente joga o código em qualquer lugar da memória virtual. Como estamos em "Bare Metal", precisamos dizer **exatamente** onde o código deve ficar na RAM física.
 
-- [x] Capítulo 2: First Steps
-  - [x] Estrutura de diretórios
-  - [x] loader.s com Multiboot header
-  - [x] link.ld (linker script)
-  - [x] Makefile básico
-  - [x] Configuração do Bochs
-  - [x] stage2_eltorito obtido e configurado
-  - [x] ISO bootável criada (os.iso)
+* Este script diz ao Linker para montar nosso executável começando no endereço `0x00100000` (1MB), que é o padrão seguro para Kernels x86.
 
-- [x] Capítulo 3: Getting to C
-  - [x] Configuração da stack (16KB)
-  - [x] Chamada para kmain
-  - [x] kmain.c implementado
-  - [x] Makefile atualizado para C
+---
 
-## Status do Projeto
+## 🛠️ Entendendo a Toolchain (Ferramentas)
 
-✅ **Projeto completo e funcional!**
+Para transformar esses arquivos de texto em um Sistema Operacional Bootável (`.iso`), usamos um processo de 3 etapas automatizado pelo `Makefile`:
 
-- Kernel compilado: `kernel.elf` (5.1KB)
-- ISO bootável: `os.iso` (658KB)
-- Todos os capítulos 2 e 3 implementados
+1. **Montagem (NASM):** Transforma `loader.s` em código de máquina (`.o`).
+2. **Compilação (GCC):** Transforma `kmain.c` em código de máquina (`.o`), garantindo compatibilidade 32-bits.
+3. **Linkagem (LD):** Pega os dois arquivos `.o`, consulta o mapa `link.ld`, e gera o executável final `kernel.elf`.
 
-## Testando o Kernel
+Por fim, o `genisoimage` embrulha esse executável junto com o GRUB para criar o CD (`os.iso`).
 
-O kernel foi compilado com sucesso e está pronto para ser executado em um emulador.
+---
 
-### Verificar a compilação:
-```bash
-wsl.exe -d Ubuntu bash -c "cd /mnt/c/Users/Rodrigo/Documents/projeto-so && make all"
-```
+## 🧪 Como Validar (O Teste do "Cafebabe")
 
-### Criar a ISO:
-```bash
-wsl.exe -d Ubuntu bash -c "cd /mnt/c/Users/Rodrigo/Documents/projeto-so && make iso"
-```
+Como ainda não escrevemos drivers de vídeo (Capítulo 4), a tela do emulador ficará preta ou mostrará o menu do GRUB. Isso é normal.
 
-### Executar no QEMU (recomendado):
-```bash
-wsl.exe -d Ubuntu bash -c "cd /mnt/c/Users/Rodrigo/Documents/projeto-so && make run-qemu"
-```
+Para saber se funcionou:
 
-## Referências
+1. No código, instruímos o processador a escrever o valor mágico `0xCAFEBABE` no registrador `EAX`.
+2. Rodamos o emulador (Bochs ou QEMU).
+3. Fechamos o emulador e verificamos o Log.
+4. Se `EAX = CAFEBABE` aparece no log, significa que:
+   * O Boot funcionou.
+   * A Stack foi criada.
+   * O C foi executado com sucesso.
 
-- [The Little OS Book](https://littleosbook.github.io/)
-- [OSDev Wiki](https://wiki.osdev.org/)
-- [Multiboot Specification](https://www.gnu.org/software/grub/manual/multiboot/multiboot.html)
+---
 
+## 🔗 Referências e Leitura Complementar
+
+* **Little OS Book:** [https://littleosbook.github.io/](https://littleosbook.github.io/)
+* **OSDev Wiki (A Bíblia do desenvolvimento de SO):** [https://wiki.osdev.org/](https://wiki.osdev.org/)
+* **Multiboot Specification:** Documentação oficial sobre como bootloaders conversam com kernels.
