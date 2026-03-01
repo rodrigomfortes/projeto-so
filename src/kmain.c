@@ -1,21 +1,27 @@
-/* kmain.c - Kernel principal em C (Capítulo 3.3) */
-/* Referência: The Little OS Book - Chapter 3: Getting to C */
+#include "framebuffer.h"
+#include "serial.h"
 
 /*
  * kmain - Ponto de entrada do kernel em C
- *
- * Esta função é chamada pelo loader.s após a configuração da stack.
- * Por enquanto, ela apenas mantém o sistema rodando em um loop infinito.
- *
- * Nota: Não podemos usar bibliotecas padrão (stdio.h, stdlib.h, etc.)
- * pois estamos em um ambiente freestanding (sem sistema operacional).
  */
 void kmain(void)
 {
-    /* Loop infinito para manter o kernel rodando */
+    /* Inicializa as portas seriais COM1 para o arquivo de log do emulador */
+    serial_initialize();
+    serial_print("Porta Serial (COM1) Inicializada com sucesso!\n");
+    serial_print("Kernel do Little OS Book - Teste do Capitulo 4\n");
+
+    /* Limpa a tela do terminal (VGA text mode) */
+    console_clear();
+
+    /* Escreve a primeira mensagem nativamente na memoria de video (0x000B8000) */
+    console_write_colored("Hello World!\n\n", CONSOLE_LIGHT_MAGENTA, CONSOLE_BLACK);
+    console_write_colored("Finalmente deu certo!\n", CONSOLE_MAGENTA, CONSOLE_BLACK);
+     console_write_colored("Usando o framebuffer vga...!\n", CONSOLE_LIGHT_MAGENTA, CONSOLE_BLACK);
+    
+    serial_print("Mensagens enviadas para o framebuffer.\n");
+
+    /* Loop de espera para não travar a CPU */
     while (1) {
-        /* Nada a fazer por enquanto */
-        /* Em capítulos futuros, adicionaremos funcionalidades aqui */
     }
 }
-
