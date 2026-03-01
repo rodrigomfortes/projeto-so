@@ -9,7 +9,7 @@ FLAGS        equ 0x0            ; multiboot flags
 CHECKSUM     equ -MAGIC_NUMBER  ; calcula o checksum (magic number + checksum + flags = 0)
 KERNEL_STACK_SIZE equ 16384     ; tamanho da stack: 16KB
 
-section .text:                  ; início da seção de código
+section .text                   ; início da seção de código
 align 4                         ; o código deve estar alinhado a 4 bytes
     dd MAGIC_NUMBER             ; escreve o magic number no binário executável
     dd FLAGS                    ; escreve as flags no binário executável
