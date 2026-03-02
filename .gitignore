@@ -12,4 +12,9 @@
 # Logs do Bochs
 bochsout.txt
 bochslog.txt
-bochslog.txt
+
+# Logs da porta serial (COM1) e dumps
+*.out
+com1.out
+dump.txt
+dump_utf8.txt

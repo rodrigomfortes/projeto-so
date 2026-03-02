@@ -13,8 +13,7 @@ GCC_FLAGS = -m32 -nostdlib -fno-builtin -ffreestanding -c -Wall -Wextra
 LD_FLAGS = -m elf_i386 -T src/link.ld
 
 # Arquivos
-LOADER_OBJ = loader.o
-KMAIN_OBJ = kmain.o
+OBJS = loader.o kmain.o io.o framebuffer.o serial.o
 KERNEL_ELF = kernel.elf
 ISO_FILE = os.iso
 
@@ -32,17 +31,18 @@ STAGE2_PATHS = /usr/lib/grub/i386-pc/stage2_eltorito \
 .PHONY: all
 all: $(KERNEL_ELF)
 
-# Compilar loader.s (Assembly)
-$(LOADER_OBJ): $(SRC_DIR)/loader.s
-	$(NASM) $(NASM_FLAGS) $(SRC_DIR)/loader.s -o $(LOADER_OBJ)
+# Compilar arquivos Assembly
+%.o: $(SRC_DIR)/%.s
+	$(NASM) $(NASM_FLAGS) $< -o $@
 
-# Compilar kmain.c (C) - será usado no Capítulo 3
-$(KMAIN_OBJ): $(SRC_DIR)/kmain.c
-	$(GCC) $(GCC_FLAGS) $(SRC_DIR)/kmain.c -o $(KMAIN_OBJ)
+# Compilar arquivos C
+%.o: $(SRC_DIR)/%.c
+	$(GCC) $(GCC_FLAGS) $< -o $@
 
-# Linkar o kernel (loader + kmain - Capítulo 3)
-$(KERNEL_ELF): $(LOADER_OBJ) $(KMAIN_OBJ)
-	$(LD) $(LD_FLAGS) -o $(KERNEL_ELF) $(LOADER_OBJ) $(KMAIN_OBJ)
+# Linkar o kernel 
+$(KERNEL_ELF): $(OBJS)
+	$(LD) $(LD_FLAGS) -o $(KERNEL_ELF) $(OBJS)
+
 
 # Criar a ISO bootável
 .PHONY: iso
@@ -94,7 +94,7 @@ run-qemu: iso
 # Limpar arquivos gerados
 .PHONY: clean
 clean:
-	rm -f $(LOADER_OBJ) $(KMAIN_OBJ) $(KERNEL_ELF) $(ISO_FILE)
+	rm -f $(OBJS) $(KERNEL_ELF) $(ISO_FILE)
 	rm -f $(ISO_DIR)/boot/$(KERNEL_ELF)
 	rm -f $(GRUB_DIR)/menu.lst
 	@echo "Nota: $(GRUB_DIR)/stage2_eltorito foi preservado"
