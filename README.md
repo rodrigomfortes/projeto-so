@@ -1,9 +1,9 @@
 
 # 🧠 MiniOS Kernel: Estudo de Caso (Little OS Book)
 
-Este projeto contém a implementação fundamental de um **Kernel x86**, desenvolvido seguindo os conceitos dos **Capítulos 1 a 5** do livro *The Little OS Book*.
+Este projeto contém a implementação fundamental de um **Kernel x86**, desenvolvido seguindo os conceitos dos **Capítulos 1 a 6** do livro *The Little OS Book*.
 
-O objetivo deste repositório não é apenas rodar um código, mas servir como material de estudo sobre **como um computador inicia**, como o hardware transfere o controle para o software, como gerenciamos saída de dados e como configuramos a segmentação de memória.
+O objetivo deste repositório não é apenas rodar um código, mas servir como material de estudo sobre **como um computador inicia**, como o hardware transfere o controle para o software, como gerenciamos saída de dados, como configuramos a segmentação de memória e como tratamos interrupções e entrada de dados.
 
 ---
 
@@ -50,7 +50,30 @@ Os dois segmentos cobrem todo o espaço de endereçamento (4GB), o chamado model
 3. Os registradores `ds`, `ss`, `es`, `fs`, `gs` recebem `0x10` (data segment).
 4. Um **far jump** para `0x08:.flush_cs` atualiza o registrador `cs` (code segment).
 
-### 5. Cross-Compilation (Compilação Cruzada)
+### 5. Interrupções e Entrada de Dados — Capítulo 6
+
+Uma interrupção é um sinal que indica ao processador que algo aconteceu — uma tecla foi pressionada, um timer disparou ou ocorreu um erro. Para tratar interrupções, implementamos:
+
+* **IDT (Interrupt Descriptor Table):** Tabela de 256 entradas que mapeia cada número de interrupção a um handler. Cada entrada aponta para código Assembly que salva registradores, chama C e retorna com `iret`.
+* **PIC (Programmable Interrupt Controller):** O chip 8259A gerencia as IRQs do hardware. Remapeamos IRQs 0-15 para interrupções 32-47 para evitar conflito com exceções do CPU (0-31).
+* **Teclado:** Quando uma tecla é pressionada, o teclado gera a IRQ 1 (interrupção 33 após remapeamento). O handler lê o scan code da porta `0x60`, traduz para ASCII e exibe no framebuffer.
+
+| PIC    | IRQ | Interrupção | Dispositivo |
+|--------|-----|-------------|-------------|
+| Master | 0   | 32          | Timer (PIT) |
+| Master | 1   | 33          | Teclado     |
+| Master | 2   | 34          | Cascade     |
+| Slave  | 8   | 40          | RTC (CMOS)  |
+
+**Fluxo completo de uma interrupção de teclado:**
+1. Tecla pressionada → Hardware gera IRQ 1
+2. PIC remapeia para interrupção 33
+3. CPU consulta IDT[33] → pula para `interrupt_handler_33` (Assembly)
+4. Assembly: pushad → call `interrupt_handler()` (C) → popad → iret
+5. C: chama `keyboard_handler()` → lê scan code → traduz para ASCII → exibe
+6. `pic_acknowledge(33)` → envia ACK ao PIC Master
+
+### 6. Cross-Compilation (Compilação Cruzada)
 
 Nós estamos programando em um sistema moderno (Linux 64-bit), mas criando código para uma máquina "pelada" (Bare Metal 32-bit).
 
@@ -64,35 +87,40 @@ Nós estamos programando em um sistema moderno (Linux 64-bit), mas criando códi
 ```
 projeto-so/
 ├── src/
-│   ├── loader.s         # Bootloader Assembly (Multiboot + Stack)
-│   ├── kmain.c          # Ponto de entrada do kernel em C
-│   ├── link.ld          # Linker script (mapa de memória)
-│   ├── io.s             # Instruções in/out em Assembly
-│   ├── io.h             # Header das funções de I/O
-│   ├── framebuffer.c    # Driver do framebuffer VGA
-│   ├── framebuffer.h    # Header do framebuffer
-│   ├── serial.c         # Driver da porta serial COM1
-│   ├── serial.h         # Header da porta serial
-│   ├── gdt.c            # Implementação da GDT
-│   ├── gdt.h            # Header da GDT (structs + protótipos)
-│   └── gdt_flush.s      # Rotina Assembly para lgdt + atualizar segmentos
-├── Makefile             # Automação do build
-├── bochsrc.txt          # Configuração do emulador Bochs
-└── README.md            # Este arquivo
+│   ├── loader.s              # Bootloader Assembly (Multiboot + Stack)
+│   ├── kmain.c               # Ponto de entrada do kernel em C
+│   ├── link.ld               # Linker script (mapa de memória)
+│   ├── io.s / io.h           # Instruções in/out em Assembly
+│   ├── framebuffer.c/.h      # Driver do framebuffer VGA
+│   ├── serial.c/.h           # Driver da porta serial COM1
+│   ├── gdt.c/.h              # Global Descriptor Table
+│   ├── gdt_flush.s           # lgdt + atualizar segmentos
+│   ├── idt.c/.h              # Interrupt Descriptor Table
+│   ├── interrupt_handlers.s  # Macros NASM + common handler + lidt
+│   ├── interrupt.c/.h        # Dispatch de interrupções em C
+│   ├── pic.c/.h              # Programmable Interrupt Controller
+│   └── keyboard.c/.h         # Driver de teclado (scan codes)
+├── Makefile                  # Automação do build
+├── bochsrc.txt               # Configuração do emulador Bochs
+└── README.md                 # Este arquivo
 ```
 
 ### Componentes Principais
 
-| Arquivo           | Função                    | Capítulo |
-|-------------------|---------------------------|----------|
-| `loader.s`        | Boot, stack, entry point  | 2-3      |
-| `kmain.c`         | Lógica principal do kernel| 3        |
-| `link.ld`         | Mapa de memória (1MB+)    | 2        |
-| `io.s` / `io.h`   | Acesso a portas de I/O   | 4        |
-| `framebuffer.*`   | Driver de vídeo VGA       | 4        |
-| `serial.*`        | Driver da porta serial    | 4        |
-| `gdt.c` / `gdt.h` | Global Descriptor Table  | 5        |
-| `gdt_flush.s`     | Carga da GDT (Assembly)   | 5        |
+| Arquivo                | Função                       | Capítulo |
+|------------------------|------------------------------|----------|
+| `loader.s`             | Boot, stack, entry point     | 2-3      |
+| `kmain.c`              | Lógica principal do kernel   | 3        |
+| `link.ld`              | Mapa de memória (1MB+)       | 2        |
+| `io.s` / `io.h`       | Acesso a portas de I/O       | 4        |
+| `framebuffer.*`        | Driver de vídeo VGA          | 4        |
+| `serial.*`             | Driver da porta serial       | 4        |
+| `gdt.*` / `gdt_flush.s` | Global Descriptor Table    | 5        |
+| `idt.*`                | Interrupt Descriptor Table   | 6        |
+| `interrupt_handlers.s` | Handlers Assembly (macros)   | 6        |
+| `interrupt.*`          | Dispatch de interrupções (C) | 6        |
+| `pic.*`                | PIC remapping + acknowledge  | 6        |
+| `keyboard.*`           | Driver de teclado            | 6        |
 
 ---
 
@@ -100,8 +128,8 @@ projeto-so/
 
 Para transformar esses arquivos de texto em um Sistema Operacional Bootável (`.iso`), usamos um processo automatizado pelo `Makefile`:
 
-1. **Montagem (NASM):** Transforma `loader.s`, `io.s`, `gdt_flush.s` em código de máquina (`.o`).
-2. **Compilação (GCC):** Transforma `kmain.c`, `framebuffer.c`, `serial.c`, `gdt.c` em código de máquina (`.o`), com flags de bare-metal 32-bits.
+1. **Montagem (NASM):** Transforma `loader.s`, `io.s`, `gdt_flush.s`, `interrupt_handlers.s` em código de máquina (`.o`).
+2. **Compilação (GCC):** Transforma `kmain.c`, `framebuffer.c`, `serial.c`, `gdt.c`, `idt.c`, `interrupt.c`, `pic.c`, `keyboard.c` em código de máquina (`.o`), com flags de bare-metal 32-bits.
 3. **Linkagem (LD):** Pega todos os `.o`, consulta o mapa `link.ld`, e gera o executável `kernel.elf`.
 4. **ISO (genisoimage):** Embrulha o executável junto com o GRUB para criar o CD bootável (`os.iso`).
 
@@ -122,22 +150,29 @@ make run-qemu             # executar no QEMU (alternativa)
 
 Na tela do emulador, o kernel deve exibir:
 ```
-=== MiniOS Kernel ===
+Hello World!
 
-[OK] GDT inicializada (Cap. 5)
-[OK] Framebuffer VGA ativo (Cap. 4)
-[OK] Porta Serial COM1 ativa (Cap. 4)
+Finalmente deu certo!
+Usando o framebuffer vga...!
+GDT carregada com sucesso!
+IDT e PIC inicializados!
+Teclado habilitado - digite algo!
 ```
+
+Após essa tela, ao **pressionar teclas** no emulador, os caracteres digitados devem aparecer na tela.
 
 No arquivo `com1.out` (log serial):
 ```
 Porta Serial (COM1) Inicializada com sucesso!
-Kernel do Little OS Book - Capitulos 1-5
+Kernel do Little OS Book - Teste do Capitulo 6
 GDT (Global Descriptor Table) carregada com sucesso!
-Todas as mensagens enviadas para o framebuffer.
+PIC remapeado (IRQs 0-15 -> INT 32-47)
+IDT (Interrupt Descriptor Table) carregada com sucesso!
+Mensagens enviadas para o framebuffer.
+Interrupcoes habilitadas (sti). Aguardando input do teclado...
 ```
 
-Se o kernel **não** sofrer *triple fault* (não reiniciar), a GDT foi carregada com sucesso.
+Se o kernel **não** sofrer *triple fault* e responder ao teclado, todos os subsistemas estão funcionando.
 
 ---
 
@@ -147,5 +182,8 @@ Se o kernel **não** sofrer *triple fault* (não reiniciar), a GDT foi carregada
 * **OSDev Wiki (A Bíblia do desenvolvimento de SO):** [https://wiki.osdev.org/](https://wiki.osdev.org/)
 * **OSDev - Segmentation:** [https://wiki.osdev.org/Segmentation](https://wiki.osdev.org/Segmentation)
 * **OSDev - GDT:** [https://wiki.osdev.org/GDT](https://wiki.osdev.org/GDT)
-* **Intel Manual, Chapter 3:** Detalhes sobre descritores de segmento e a GDT
+* **OSDev - IDT:** [https://wiki.osdev.org/IDT](https://wiki.osdev.org/IDT)
+* **OSDev - Interrupts:** [https://wiki.osdev.org/Interrupts](https://wiki.osdev.org/Interrupts)
+* **OSDev - PIC:** [https://wiki.osdev.org/PIC](https://wiki.osdev.org/PIC)
+* **Intel Manual, Chapters 3 e 6:** Detalhes sobre segmentação e interrupções
 * **Multiboot Specification:** Documentação oficial sobre como bootloaders conversam com kernels
