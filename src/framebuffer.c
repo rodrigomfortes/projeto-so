@@ -94,7 +94,7 @@ void console_write_colored(char *text, unsigned char fg, unsigned char bg) {
 }
 
 /**
- * Escreve uma string verde limão no console (Padrão Matrix/Hacker)
+ * Escreve uma string branca no console
  */
 void console_write(char *text) {
     console_write_colored(text, CONSOLE_WHITE, CONSOLE_BLACK);
