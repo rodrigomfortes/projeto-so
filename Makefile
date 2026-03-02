@@ -13,7 +13,7 @@ GCC_FLAGS = -m32 -nostdlib -fno-builtin -ffreestanding -c -Wall -Wextra
 LD_FLAGS = -m elf_i386 -T src/link.ld
 
 # Arquivos
-OBJS = loader.o kmain.o io.o framebuffer.o serial.o
+OBJS = loader.o kmain.o io.o framebuffer.o serial.o gdt.o gdt_flush.o
 KERNEL_ELF = kernel.elf
 ISO_FILE = os.iso
 
