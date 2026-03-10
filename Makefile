@@ -1,5 +1,5 @@
-# Makefile - Build automation para o kernel (Capítulos 2.3.1, 2.3.2 e 3.4)
-# Referência: The Little OS Book - Chapters 2 & 3
+# Makefile - Build automation para o kernel (Capítulos 2.3.1, 2.3.2, 3.4 e 7)
+# Referência: The Little OS Book - Chapters 2, 3 & 7
 
 # Compiladores e ferramentas
 NASM = nasm
@@ -16,11 +16,13 @@ LD_FLAGS = -m elf_i386 -T src/link.ld
 OBJS = loader.o kmain.o io.o framebuffer.o serial.o gdt.o gdt_flush.o idt.o interrupt_handlers.o interrupt.o pic.o keyboard.o
 KERNEL_ELF = kernel.elf
 ISO_FILE = os.iso
+PROGRAM = iso/modules/program
 
 # Diretórios
 SRC_DIR = src
 ISO_DIR = iso
 GRUB_DIR = $(ISO_DIR)/boot/grub
+MODULES_DIR = $(ISO_DIR)/modules
 
 # Localização do stage2_eltorito (pode variar dependendo da instalação)
 STAGE2_PATHS = /usr/lib/grub/i386-pc/stage2_eltorito \
@@ -30,6 +32,11 @@ STAGE2_PATHS = /usr/lib/grub/i386-pc/stage2_eltorito \
 # Target padrão
 .PHONY: all
 all: $(KERNEL_ELF)
+
+# Compilar o programa externo como binário flat (Capítulo 7)
+$(PROGRAM): $(SRC_DIR)/program.s
+	@mkdir -p $(MODULES_DIR)
+	$(NASM) -f bin $< -o $@
 
 # Compilar arquivos Assembly
 %.o: $(SRC_DIR)/%.s
@@ -46,9 +53,9 @@ $(KERNEL_ELF): $(OBJS)
 
 # Criar a ISO bootável
 .PHONY: iso
-iso: $(KERNEL_ELF)
+iso: $(KERNEL_ELF) $(PROGRAM)
 	@echo "Criando estrutura ISO..."
-	@mkdir -p $(ISO_DIR)/boot/grub
+	@mkdir -p $(ISO_DIR)/boot/grub $(MODULES_DIR)
 	@cp $(KERNEL_ELF) $(ISO_DIR)/boot/$(KERNEL_ELF)
 	@echo "Procurando stage2_eltorito..."
 	@if [ -f "$(GRUB_DIR)/stage2_eltorito" ]; then \
@@ -75,6 +82,7 @@ iso: $(KERNEL_ELF)
 	@echo "" >> $(GRUB_DIR)/menu.lst
 	@echo "title os" >> $(GRUB_DIR)/menu.lst
 	@echo "kernel /boot/$(KERNEL_ELF)" >> $(GRUB_DIR)/menu.lst
+	@echo "module /modules/program" >> $(GRUB_DIR)/menu.lst
 	@echo "Gerando ISO..."
 	$(GENISOIMAGE) -R -b boot/grub/stage2_eltorito -no-emul-boot \
 		-boot-load-size 4 -A os -input-charset utf8 -quiet \
@@ -97,6 +105,7 @@ clean:
 	rm -f $(OBJS) $(KERNEL_ELF) $(ISO_FILE)
 	rm -f $(ISO_DIR)/boot/$(KERNEL_ELF)
 	rm -f $(GRUB_DIR)/menu.lst
+	rm -f $(PROGRAM)
 	@echo "Nota: $(GRUB_DIR)/stage2_eltorito foi preservado"
 
 # Help
