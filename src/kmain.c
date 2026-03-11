@@ -3,16 +3,18 @@
 #include "gdt.h"
 #include "idt.h"
 #include "pic.h"
+#include "multiboot.h"
 
 /*
  * kmain - Ponto de entrada do kernel em C
+ * ebx: ponteiro para a struct multiboot_info_t preenchida pelo GRUB (Capítulo 7)
  */
-void kmain(void)
+void kmain(unsigned int ebx)
 {
     /* Inicializa as portas seriais COM1 para o arquivo de log do emulador */
     serial_initialize();
     serial_print("Porta Serial (COM1) Inicializada com sucesso!\n");
-    serial_print("Kernel do Little OS Book - Teste do Capitulo 6\n");
+    serial_print("Kernel do Little OS Book - Teste do Capitulo 7\n");
 
     /* Inicializa a GDT (Global Descriptor Table) - Capítulo 5
      * Configura os segmentos de memória do kernel:
@@ -59,7 +61,50 @@ void kmain(void)
      */
     __asm__ volatile ("sti");
 
-    serial_print("Interrupcoes habilitadas (sti). Aguardando input do teclado...\n");
+    serial_print("Interrupcoes habilitadas (sti).\n");
+
+    /* === Capítulo 7: Carregamento de Programa Externo via Módulo GRUB ===
+     *
+     * O GRUB armazena um ponteiro para a struct multiboot_info_t em EBX.
+     * Ela descreve os módulos carregados na memória.
+     * Verificamos o bit 3 do campo flags para confirmar que mods_count
+     * e mods_addr são válidos antes de tentar saltar para o programa.
+     */
+    multiboot_info_t *mbinfo = (multiboot_info_t *) ebx;
+
+    if (mbinfo->flags & MULTIBOOT_FLAG_MODS) {
+        serial_print("Modulos multiboot detectados.\n");
+
+        if (mbinfo->mods_count == 1) {
+            multiboot_mod_t *mods = (multiboot_mod_t *) mbinfo->mods_addr;
+            unsigned int program_addr = mods->mod_start;
+
+            console_write_colored("\nModulo carregado! Saltando para o programa...\n",
+                                  CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
+            serial_print("Saltando para o programa em modo kernel...\n");
+
+            /* Desabilita interrupções antes de saltar para o programa externo.
+             * Isso garante que nenhuma IRQ (teclado, timer) sobrescreva os
+             * registradores enquanto o programa roda seu loop infinito (jmp $).
+             * Assim, ao pausar o Bochs, eax conterá 0xDEADBEEF conforme esperado.
+             */
+            __asm__ volatile ("cli");
+
+            /* Converte o endereço do módulo em ponteiro de função e executa */
+            typedef void (*call_module_t)(void);
+            call_module_t start_program = (call_module_t) program_addr;
+            start_program();
+            /* Nunca chegamos aqui, pois o programa entra em loop infinito */
+        } else {
+            serial_print("AVISO: mods_count != 1, abortando salto.\n");
+            console_write_colored("\nAVISO: numero de modulos inesperado!\n",
+                                  CONSOLE_LIGHT_RED, CONSOLE_BLACK);
+        }
+    } else {
+        serial_print("Nenhum modulo multiboot encontrado. Aguardando teclado...\n");
+        console_write_colored("\nNenhum modulo carregado. Aguardando input...\n",
+                              CONSOLE_MAGENTA, CONSOLE_BLACK);
+    }
 
     /* Loop de espera para não travar a CPU */
     while (1) {
