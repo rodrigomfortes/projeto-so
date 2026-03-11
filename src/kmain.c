@@ -83,6 +83,13 @@ void kmain(unsigned int ebx)
                                   CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
             serial_print("Saltando para o programa em modo kernel...\n");
 
+            /* Desabilita interrupções antes de saltar para o programa externo.
+             * Isso garante que nenhuma IRQ (teclado, timer) sobrescreva os
+             * registradores enquanto o programa roda seu loop infinito (jmp $).
+             * Assim, ao pausar o Bochs, eax conterá 0xDEADBEEF conforme esperado.
+             */
+            __asm__ volatile ("cli");
+
             /* Converte o endereço do módulo em ponteiro de função e executa */
             typedef void (*call_module_t)(void);
             call_module_t start_program = (call_module_t) program_addr;
