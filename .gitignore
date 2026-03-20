@@ -7,7 +7,10 @@
 *.iso
 
 # Diretório ISO temporário
-/iso/boot/kernel.elf
+iso/boot/kernel.elf
+iso/boot/grub/menu.lst
+iso/boot/grub/stage2_eltorito
+iso/modules/
 
 # Logs do Bochs
 bochsout.txt
