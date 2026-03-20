@@ -6,12 +6,12 @@
 #include "multiboot.h"
 
 /*
- * kmain - Ponto de entrada do kernel em C
- * ebx: ponteiro para a struct multiboot_info_t preenchida pelo GRUB (Capítulo 7)
+ * kmain - Ponto de entrada do nosso kernel
+ * Recebemos em ebx o ponteiro da struct multiboot_info_t do GRUB 
+ * (já ajustado para endereço virtual.)
  */
 void kmain(unsigned int ebx)
 {
-    /* Inicializa as portas seriais COM1 para o arquivo de log do emulador */
     serial_initialize();
     serial_print("Porta Serial (COM1) Inicializada com sucesso!\n");
     serial_print("Kernel do Little OS Book - Teste do Capitulo 7\n");
@@ -63,23 +63,23 @@ void kmain(unsigned int ebx)
 
     serial_print("Interrupcoes habilitadas (sti).\n");
 
-    /* === Capítulo 7: Carregamento de Programa Externo via Módulo GRUB ===
-     *
-     * O GRUB armazena um ponteiro para a struct multiboot_info_t em EBX.
-     * Ela descreve os módulos carregados na memória.
-     * Verificamos o bit 3 do campo flags para confirmar que mods_count
-     * e mods_addr são válidos antes de tentar saltar para o programa.
+    /*
+     * Lendo os módulos carregados pelo GRUB.
+     * Como ativamos a paginação, todos os endereços físicos (mods_addr, mod_start)
+     * precisam receber um offset de 0xC0000000 pra dar match na memória virtual.
      */
+    #define KERNEL_VIRTUAL_BASE 0xC0000000
+
     multiboot_info_t *mbinfo = (multiboot_info_t *) ebx;
 
     if (mbinfo->flags & MULTIBOOT_FLAG_MODS) {
-        serial_print("Modulos multiboot detectados.\n");
+        serial_print("Modulo externo encontrado via GRUB!\n");
 
         if (mbinfo->mods_count == 1) {
-            multiboot_mod_t *mods = (multiboot_mod_t *) mbinfo->mods_addr;
-            unsigned int program_addr = mods->mod_start;
+            multiboot_mod_t *mods = (multiboot_mod_t *) (mbinfo->mods_addr + KERNEL_VIRTUAL_BASE);
+            unsigned int program_addr = mods->mod_start + KERNEL_VIRTUAL_BASE;
 
-            console_write_colored("\nModulo carregado! Saltando para o programa...\n",
+            console_write_colored("\nModulo carregado! Disparando programa...\n",
                                   CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
             serial_print("Saltando para o programa em modo kernel...\n");
 

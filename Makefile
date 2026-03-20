@@ -1,5 +1,5 @@
-# Makefile - Build automation para o kernel (Capítulos 2.3.1, 2.3.2, 3.4 e 7)
-# Referência: The Little OS Book - Chapters 2, 3 & 7
+# Makefile - Build automation para o kernel (Capítulos 2.3.1, 2.3.2, 3.4, 7 e 9)
+# Referência: The Little OS Book - Chapters 2, 3, 7 & 9
 
 # Compiladores e ferramentas
 NASM = nasm

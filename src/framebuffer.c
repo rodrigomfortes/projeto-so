@@ -1,8 +1,11 @@
 #include "framebuffer.h"
 #include "io.h"
 
-/* Localização da memória de vídeo (VGA text mode) */
-#define VGA_ADDRESS 0x000B8000
+/* Memória de vídeo VGA.
+ * Como ativamos a paginação apontando 3GB pro 0 físico, 
+ * o 0x000B8000 agora é acessado pelo 0xC00B8000.
+ */
+#define VGA_ADDRESS 0xC00B8000
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
 
