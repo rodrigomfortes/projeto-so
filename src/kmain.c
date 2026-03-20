@@ -4,6 +4,11 @@
 #include "idt.h"
 #include "pic.h"
 #include "multiboot.h"
+#include "memory.h"
+
+/* Símbolos definidos no linker script (link.ld) */
+extern unsigned int KERNEL_START;
+extern unsigned int KERNEL_END;
 
 /*
  * kmain - Ponto de entrada do nosso kernel
@@ -71,6 +76,20 @@ void kmain(unsigned int ebx)
     #define KERNEL_VIRTUAL_BASE 0xC0000000
 
     multiboot_info_t *mbinfo = (multiboot_info_t *) ebx;
+
+    /* Inicializa o Physical Memory Manager (Capítulo 10)
+     * Passamos pra ele a struct do Multiboot pra ele ler a RAM, e mostramos
+     * onde o nosso binário do Kernel de fato começa e termina!
+     */
+    pmm_initialize(mbinfo, (unsigned int)&KERNEL_START, (unsigned int)&KERNEL_END);
+    
+    serial_print("Teste PMM: Alocando primeira pagina 4KB... ");
+    unsigned int test_page = pmm_alloc_page();
+    if (test_page > 0) {
+        serial_print("SUCESSO!\n");
+    } else {
+        serial_print("FALHA!\n");
+    }
 
     if (mbinfo->flags & MULTIBOOT_FLAG_MODS) {
         serial_print("Modulo externo encontrado via GRUB!\n");
