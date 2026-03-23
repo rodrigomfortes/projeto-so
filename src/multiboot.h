@@ -8,6 +8,9 @@
 /* Bit 3 do campo flags: mods_count e mods_addr são válidos */
 #define MULTIBOOT_FLAG_MODS 0x8
 
+/* Bit 6 do campo flags: mmap_length e mmap_addr são válidos (Capítulo 10) */
+#define MULTIBOOT_FLAG_MEMMAP 0x40
+
 /* Estrutura que descreve um módulo carregado pelo GRUB */
 typedef struct {
     unsigned int mod_start;   /* Endereço físico de início do módulo */
@@ -15,6 +18,16 @@ typedef struct {
     unsigned int string;      /* Endereço da string de comando do módulo */
     unsigned int reserved;    /* Reservado (deve ser zero) */
 } __attribute__((packed)) multiboot_mod_t;
+
+/* Estrutura que descreve uma região da memória física (Capítulo 10) */
+typedef struct {
+    unsigned int size;        /* Tamanho da estrutura atual */
+    unsigned int base_addr_low;
+    unsigned int base_addr_high;
+    unsigned int length_low;
+    unsigned int length_high;
+    unsigned int type;        /* type = 1 indica RAM utilizável (available) */
+} __attribute__((packed)) multiboot_memory_map_t;
 
 /* Estrutura principal de informações do Multiboot
  * O GRUB preenche esta struct e passa seu endereço em EBX */

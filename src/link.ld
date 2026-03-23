@@ -9,6 +9,9 @@ ENTRY(loader)                        /* o nome da função de entrada */
 SECTIONS {
     . = 0xC0100000;                  /* o código deve ser relocado para 3GB + 1MB */
 
+    /* Marca o início do kernel (endereço virtual) */
+    KERNEL_START = .;
+
     /* alinhar em 4 KB e carregar em 1 MB */
     .text ALIGN (0x1000) : AT(ADDR(.text) - 0xC0000000)
     {
@@ -33,4 +36,8 @@ SECTIONS {
         *(COMMON)                    /* todas as seções COMMON dos arquivos */
         *(.bss)                      /* todas as seções .bss dos arquivos */
     }
+
+    /* Marca o fim do kernel (após BSS, alinhado em 4K pra garantir) */
+    . = ALIGN(0x1000);
+    KERNEL_END = .;
 }
