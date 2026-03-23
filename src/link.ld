@@ -1,26 +1,36 @@
-/* link.ld - Linker script para o kernel (Capítulo 2.3.2) */
-/* Referência: The Little OS Book - Chapter 2: Linking the Kernel */
+/*
+ * Linker script do kernel
+ * Ajusta tudo pro Higher-Half Kernel rodando em 3GB+ (0xC0100000),
+ * enquanto o GRUB joga fisicamente na gaveta de 1MB.
+ */
 
-ENTRY(loader)                /* o nome da função de entrada */
+ENTRY(loader)                        /* o nome da função de entrada */
 
 SECTIONS {
-    . = 0x00100000;          /* o código deve ser carregado em 1 MB */
+    . = 0xC0100000;                  /* o código deve ser relocado para 3GB + 1MB */
 
-    .text ALIGN(4) : {       /* alinhar em 4 bytes */
-        *(.text)             /* todas as seções .text dos arquivos */
+    /* alinhar em 4 KB e carregar em 1 MB */
+    .text ALIGN (0x1000) : AT(ADDR(.text) - 0xC0000000)
+    {
+        *(.text)                     /* todas as seções .text dos arquivos */
     }
 
-    .rodata ALIGN(4) : {     /* dados read-only alinhados em 4 bytes */
-        *(.rodata*)          /* todas as seções .rodata dos arquivos */
+    /* dados read-only alinhados em 4 KB */
+    .rodata ALIGN (0x1000) : AT(ADDR(.rodata) - 0xC0000000)
+    {
+        *(.rodata*)                  /* todas as seções .rodata dos arquivos */
     }
 
-    .data ALIGN(4) : {       /* dados read-write alinhados em 4 bytes */
-        *(.data)             /* todas as seções .data dos arquivos */
+    /* dados read-write alinhados em 4 KB */
+    .data ALIGN (0x1000) : AT(ADDR(.data) - 0xC0000000)
+    {
+        *(.data)                     /* todas as seções .data dos arquivos */
     }
 
-    .bss ALIGN(4) : {        /* dados não inicializados alinhados em 4 bytes */
-        *(COMMON)            /* todas as seções COMMON dos arquivos */
-        *(.bss)              /* todas as seções .bss dos arquivos */
+    /* dados não inicializados alinhados em 4 KB */
+    .bss ALIGN (0x1000) : AT(ADDR(.bss) - 0xC0000000)
+    {
+        *(COMMON)                    /* todas as seções COMMON dos arquivos */
+        *(.bss)                      /* todas as seções .bss dos arquivos */
     }
 }
-
