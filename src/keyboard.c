@@ -13,8 +13,7 @@
 
 #include "keyboard.h"
 #include "io.h"
-#include "framebuffer.h"
-#include "serial.h"
+#include "chat.h"
 
 /* Tabela de tradução: Scan Code Set 1 → ASCII (teclas principais)
  * Índice = scan code, Valor = caractere ASCII (0 = tecla não mapeada)
@@ -72,17 +71,16 @@ void keyboard_handler(void)
         return;
     }
 
+    /* Backspace (Set 1) — não estava na tabela */
+    if (scan_code == 0x0E) {
+        chat_kbd_enqueue((unsigned char)'\b');
+        return;
+    }
+
     /* Traduz scan code para ASCII */
     char ascii = scancode_to_ascii[scan_code];
 
     if (ascii != 0) {
-        /* Exibe no framebuffer */
-        char str[2];
-        str[0] = ascii;
-        str[1] = '\0';
-        console_write(str);
-
-        /* Envia pela serial para log */
-        serial_print(str);
+        chat_kbd_enqueue((unsigned char)ascii);
     }
 }

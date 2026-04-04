@@ -24,4 +24,7 @@ void console_clear(void);
 void console_write(char *text);
 void console_write_colored(char *text, unsigned char fg, unsigned char bg);
 
+/* Apaga o último caractere (cursor VGA) — usado no chat (backspace) */
+void console_backspace(void);
+
 #endif /* FRAMEBUFFER_H */

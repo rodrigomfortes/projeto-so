@@ -13,7 +13,7 @@ GCC_FLAGS = -m32 -nostdlib -fno-builtin -ffreestanding -c -Wall -Wextra
 LD_FLAGS = -m elf_i386 -T src/link.ld
 
 # Arquivos
-OBJS = loader.o kmain.o io.o framebuffer.o serial.o gdt.o gdt_flush.o idt.o interrupt_handlers.o interrupt.o pic.o keyboard.o memory.o
+OBJS = loader.o kmain.o io.o framebuffer.o serial.o gdt.o gdt_flush.o idt.o interrupt_handlers.o interrupt.o pic.o keyboard.o memory.o chat.o deadlock.o
 KERNEL_ELF = kernel.elf
 ISO_FILE = os.iso
 PROGRAM = iso/modules/program
@@ -78,9 +78,12 @@ iso: $(KERNEL_ELF) $(PROGRAM)
 	fi
 	@echo "Criando menu.lst..."
 	@echo "default=0" > $(GRUB_DIR)/menu.lst
-	@echo "timeout=0" >> $(GRUB_DIR)/menu.lst
+	@echo "timeout=5" >> $(GRUB_DIR)/menu.lst
 	@echo "" >> $(GRUB_DIR)/menu.lst
-	@echo "title os" >> $(GRUB_DIR)/menu.lst
+	@echo "title os (chat multiusuario — so kernel)" >> $(GRUB_DIR)/menu.lst
+	@echo "kernel /boot/$(KERNEL_ELF)" >> $(GRUB_DIR)/menu.lst
+	@echo "" >> $(GRUB_DIR)/menu.lst
+	@echo "title os (modulo externo Cap.7)" >> $(GRUB_DIR)/menu.lst
 	@echo "kernel /boot/$(KERNEL_ELF)" >> $(GRUB_DIR)/menu.lst
 	@echo "module /modules/program" >> $(GRUB_DIR)/menu.lst
 	@echo "Gerando ISO..."
@@ -99,6 +102,11 @@ run: iso
 run-qemu: iso
 	qemu-system-i386 -cdrom $(ISO_FILE)
 
+# QEMU com COM1 no stdio — segundo utilizador escreve no terminal onde corre o QEMU
+.PHONY: run-qemu-chat
+run-qemu-chat: iso
+	qemu-system-i386 -cdrom $(ISO_FILE) -serial stdio
+
 # Limpar arquivos gerados
 .PHONY: clean
 clean:
@@ -115,7 +123,8 @@ help:
 	@echo "  all        - Compilar o kernel (padrão)"
 	@echo "  iso        - Criar a ISO bootável"
 	@echo "  run        - Executar no Bochs"
-	@echo "  run-qemu   - Executar no QEMU"
+	@echo "  run-qemu      - Executar no QEMU"
+	@echo "  run-qemu-chat - QEMU com serial no terminal (chat multiusuario)"
 	@echo "  clean      - Remover arquivos gerados"
 	@echo "  help       - Mostrar esta mensagem"
 

@@ -64,3 +64,13 @@ void serial_print(char *mensagem) {
         current++;
     }
 }
+
+int serial_rx_ready(void)
+{
+    return (inb(UART_LINE_STAT) & 0x01) != 0;
+}
+
+unsigned char serial_read_byte(void)
+{
+    return inb(UART_DATA);
+}
