@@ -1,6 +1,7 @@
 #include "chat.h"
 #include "framebuffer.h"
 #include "serial.h"
+#include "deadlock.h"
 
 #define KBD_RING_SZ 256
 #define LINE_MAX 120
@@ -56,6 +57,28 @@ static void chat_submit(const char *user, const char *msg)
     __asm__ volatile ("sti");
 }
 
+/* Comparação simples de strings (sem libc) */
+static int str_equal(const char *a, const char *b)
+{
+    while (*a && *b) {
+        if (*a != *b)
+            return 0;
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+/* Verifica se a linha digitada é um comando especial */
+static int chat_try_command(const char *line)
+{
+    if (str_equal(line, "/deadlock")) {
+        deadlock_demo();
+        return 1;
+    }
+    return 0;
+}
+
 void chat_init(void)
 {
     kbd_head = 0;
@@ -95,7 +118,8 @@ static void kbd_process_char(unsigned char c)
 {
     if (c == '\n') {
         kbd_line[kbd_len] = '\0';
-        chat_submit("vga", kbd_line);
+        if (!chat_try_command(kbd_line))
+            chat_submit("vga", kbd_line);
         kbd_len = 0;
         kbd_line[0] = '\0';
         return;
@@ -129,12 +153,15 @@ static void kbd_process_char(unsigned char c)
 
 static void ser_process_char(unsigned char c)
 {
-    if (c == '\r')
-        return;
-
-    if (c == '\n') {
+    /* Aceitar tanto \n quanto \r (Windows/WSL) como tecla Enter */
+    if (c == '\n' || c == '\r') {
+        /* Para evitar pular linha dupla no terminal host, ecoamos \r\n */
+        char eco[3] = "\r\n";
+        serial_print(eco);
+        
         ser_line[ser_len] = '\0';
-        chat_submit("serial", ser_line);
+        if (!chat_try_command(ser_line))
+            chat_submit("serial", ser_line);
         ser_len = 0;
         ser_line[0] = '\0';
         return;
@@ -155,6 +182,14 @@ static void ser_process_char(unsigned char c)
 
     ser_line[ser_len++] = (char)c;
     ser_line[ser_len] = '\0';
+
+    /* Ecoa a tecla que acabou de ser pressionada de volta para o terminal do host ficar visível */
+    {
+        char echo[2];
+        echo[0] = (char)c;
+        echo[1] = '\0';
+        serial_print(echo);
+    }
 }
 
 void chat_poll(void)
