@@ -1,5 +1,6 @@
 #include "framebuffer.h"
 #include "serial.h"
+#include "chat.h"
 #include "gdt.h"
 #include "idt.h"
 #include "pic.h"
@@ -120,13 +121,21 @@ void kmain(unsigned int ebx)
                                   CONSOLE_LIGHT_RED, CONSOLE_BLACK);
         }
     } else {
-        serial_print("Nenhum modulo multiboot encontrado. Aguardando teclado...\n");
-        console_write_colored("\nNenhum modulo carregado. Aguardando input...\n",
-                              CONSOLE_MAGENTA, CONSOLE_BLACK);
+        serial_print("Nenhum modulo multiboot encontrado.\n");
     }
 
-    /* Loop de espera para não travar a CPU */
+    serial_print("Modo chat do kernel (vga=teclado, serial=COM1).\n");
+    console_write_colored("\n--- Chat no kernel ---\n", CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
+    console_write_colored("[vga] teclado na janela VGA  |  [serial] terminal host (QEMU: -serial stdio)\n",
+                          CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
+    console_write_colored("Enter envia a linha. Backspace apaga.\n",
+                          CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
+
+    chat_init();
+
+    /* Polling: drena fila do teclado (IRQ) e bytes da COM1 */
     while (1) {
+        chat_poll();
     }
 }
 

@@ -102,3 +102,13 @@ void console_write_colored(char *text, unsigned char fg, unsigned char bg) {
 void console_write(char *text) {
     console_write_colored(text, CONSOLE_WHITE, CONSOLE_BLACK);
 }
+
+void console_backspace(void)
+{
+    if (current_position == 0) {
+        return;
+    }
+    current_position--;
+    set_character(current_position, ' ', CONSOLE_WHITE, CONSOLE_BLACK);
+    update_cursor_position(current_position);
+}
