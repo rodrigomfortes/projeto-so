@@ -1,0 +1,37 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ "main", "feature/*" ]
+  pull_request:
+    branches: [ git"main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout do codigo
+      uses: actions/checkout@v4
+
+    - name: Instalar dependencias do Bare-Metal (Compiladores e Criador de ISO)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-multilib nasm genisoimage wget
+
+    - name: CI - Compilar o Kernel (Verificacao de codigo)
+      run: make all
+
+    - name: Baixar o Bootloader (stage2_eltorito)
+      run: |
+        mkdir -p iso/boot/grub
+        wget https://github.com/littleosbook/littleosbook/raw/master/files/stage2_eltorito -O iso/boot/grub/stage2_eltorito
+
+    - name: CD - Gerar a Imagem do Sistema Operacional (.iso)
+      run: make iso
+
+    - name: CD - Disponibilizar a ISO para Download publico
+      uses: actions/upload-artifact@v4
+      with:
+        name: Projeto-SO-BareMetal-ISO
+        path: os.iso
