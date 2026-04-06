@@ -174,15 +174,5 @@ void deadlock_demo(void)
 
     demo_com_hierarquia();
 
-    log_msg("Fim da demonstracao. Voltando ao chat.\n\n", CONSOLE_WHITE);
-
-    /*
-     * Limpa qualquer scan-code que o teclado tenha gerado enquanto
-     * as interrupcoes estavam desabilitadas (cli dentro de log_msg).
-     * Sem isso, o controlador do teclado pode travar esperando leitura.
-     */
-    __asm__ volatile("cli");
-    while (inb(0x64) & 0x01)   /* bit 0 do status = Output Buffer Full */
-        (void)inb(0x60);       /* descarta o scan-code pendente        */
-    __asm__ volatile("sti");
+    log_msg("Fim da demonstracao.\n\n", CONSOLE_WHITE);
 }

@@ -64,23 +64,29 @@ unsigned char read_scan_code(void)
  */
 void keyboard_handler(void)
 {
-    unsigned char scan_code = read_scan_code();
+    /* Drenamos todo o buffer pendente no controlador. Isso garante 
+     * que a linha do IRQ1 desça novamente para zero, o que é mandatório
+     * para o PIC detectar a próxima interrupção (edge-triggered).
+     */
+    while (inb(0x64) & 0x01) {
+        unsigned char scan_code = read_scan_code();
 
-    /* Ignora break codes (tecla liberada) */
-    if (scan_code & 0x80) {
-        return;
-    }
+        /* Ignora break codes (tecla liberada) */
+        if (scan_code & 0x80) {
+            continue;
+        }
 
-    /* Backspace (Set 1) — não estava na tabela */
-    if (scan_code == 0x0E) {
-        chat_kbd_enqueue((unsigned char)'\b');
-        return;
-    }
+        /* Backspace (Set 1) — não estava na tabela */
+        if (scan_code == 0x0E) {
+            chat_kbd_enqueue((unsigned char)'\b');
+            continue;
+        }
 
-    /* Traduz scan code para ASCII */
-    char ascii = scancode_to_ascii[scan_code];
+        /* Traduz scan code para ASCII */
+        char ascii = scancode_to_ascii[scan_code];
 
-    if (ascii != 0) {
-        chat_kbd_enqueue((unsigned char)ascii);
+        if (ascii != 0) {
+            chat_kbd_enqueue((unsigned char)ascii);
+        }
     }
 }
