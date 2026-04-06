@@ -1,178 +1,225 @@
 #include "deadlock.h"
-#include "serial.h"
 #include "framebuffer.h"
+#include "serial.h"
+
+typedef struct {
+    volatile int locked;    /* 0 = livre, 1 = travado */
+    const char  *name;      /* nome para o debug      */
+} spinlock_t;
+
+/* Recurso do usuário — simula um "arquivo" que precisa de lock */
+typedef struct {
+    spinlock_t  lock;
+    char        data[64];   /* conteúdo do "arquivo" */
+    const char *owner;
+} user_file_t;
+
+/* Um recurso para cada usuário do chat */
+static user_file_t file_vga;
+static user_file_t file_serial;
+
+/**
+ * atomic_xchg — troca atômica via instrução XCHG.
+ * Retorna o valor anterior de *ptr e coloca val no lugar.
+ */
+static int atomic_xchg(volatile int *ptr, int val)
+{
+    int result;
+    __asm__ volatile (
+        "xchgl %0, %1"
+        : "=r"(result), "+m"(*ptr)
+        : "0"(val)
+        : "memory"
+    );
+    return result;
+}
 
 /*
- * Implementacao basica de travas (Spinlocks)
- * Em um sistema operativo single-core sem escalonador preemptivo,
- * a utilizacao de flags simples permite demonstrar passo a passo 
- * como o cruzamento de multiplos processos acessando variaveis 
- * compartilhadas causa um deadlock.
+ * spin_lock — adquire a trava atômica.
+ * Se o recurso estiver ocupado, entra em busy-wait (loop infinito) até a liberação.
  */
-
-void spinlock_acquire(spinlock_t *lock)
+static void spin_lock(spinlock_t *lk)
 {
-    lock->locked = 1;
+    while (atomic_xchg(&lk->locked, 1) != 0) {
+        /* fica preso aqui quando rola deadlock */
+    }
 }
 
-int spinlock_try_acquire(spinlock_t *lock)
-{
-    if (lock->locked)
-        return 0;   /* Retorna 0 se a trava ja estiver em uso */
-    lock->locked = 1;
-    return 1;       /* Sucesso ao travar */
-}
-
-void spinlock_release(spinlock_t *lock)
-{
-    lock->locked = 0;
-}
-
-/*  
- * Recursos compartilhados da simulacao:
- * Simulando a "transferencia de arquivos".
- * Para mover arquivos da Memoria do VGA para a Memoria do Serial, o 
- * processo precisa adquirir a trava (lock) de ambos os recursos ao  
- * mesmo tempo. Isso evita interferencias externas durante a copia.
+/**
+ * spin_unlock — libera o lock.
  */
+static void spin_unlock(spinlock_t *lk)
+{
+    __asm__ volatile ("" ::: "memory");   /* barreira de memória */
+    lk->locked = 0;
+}
 
-static spinlock_t caixa_vga    = SPINLOCK_INIT("Caixa_VGA");
-static spinlock_t caixa_serial = SPINLOCK_INIT("Caixa_Serial");
+/* cópia de string sem libc */
+static void str_copy(char *dst, const char *src, unsigned int max)
+{
+    unsigned int i = 0;
+    while (src[i] && i + 1 < max) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = '\0';
+}
 
-/* Pausa inserida intencionalmente para permitir a leitura dos logs */
-static void demo_delay(void)
+/* delay artificial para dar tempo de ler o log */
+static void busy_delay(void)
 {
     volatile unsigned int i;
     for (i = 0; i < 3000000; i++)
         ;
 }
 
-/* Funcao de log segura para imprimir nas duas telas sem quebrar as linhas */
-static void log_msg(const char *msg, unsigned char cor)
+
+void deadlock_init(void)
 {
+    file_vga.lock.locked = 0;
+    file_vga.lock.name   = "lock_vga";
+    file_vga.owner        = "vga";
+    str_copy(file_vga.data, "foto_ferias.png", sizeof file_vga.data);
+
+    file_serial.lock.locked = 0;
+    file_serial.lock.name   = "lock_serial";
+    file_serial.owner        = "serial";
+    str_copy(file_serial.data, "trabalho.pdf", sizeof file_serial.data);
+}
+
+/*
+ * Simula dois usuários tentando realizar uma transferência ao mesmo tempo sem hierarquia de locks.
+ */
+void deadlock_demo_unsafe(void)
+{
+    /* limpa os locks antes de começar */
+    file_vga.lock.locked    = 0;
+    file_serial.lock.locked = 0;
+
+    serial_print("  DEMO: DEADLOCK\r\n");
+
+    console_write_colored("\nDEMO: DEADLOCK\n",
+                          CONSOLE_LIGHT_RED, CONSOLE_BLACK);
+
+    /* Proc VGA trava o próprio arquivo */
+    serial_print("[VGA]    Travando lock_vga...\r\n");
+    console_write_colored("[VGA] Travando lock_vga...\n",
+                          CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
+
+    spin_lock(&file_vga.lock);
+
+    serial_print("[VGA]    lock_vga travado!\r\n");
+    console_write_colored("[VGA] lock_vga travado!\n",
+                          CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
+
+    busy_delay();
+
     /*
-     * Protege SOMENTE a escrita no framebuffer (rapida).
-     * serial_print faz busy-wait e demoraria demais com cli,
-     * causando perda de IRQs do teclado.
+     * Proc Serial trava o próprio arquivo.
+     * Como não há suporte nativo a threads, a simulação injeta
+     * o bloqueio manualmente na variável.
      */
-    __asm__ volatile("cli");
-    console_write_colored((char *)msg, cor, CONSOLE_BLACK);
-    __asm__ volatile("sti");
+    serial_print("[Serial] Travando lock_serial...\r\n");
+    console_write_colored("[Serial] Travando lock_serial...\n",
+                          CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
 
-    serial_print((char *)msg);
+    file_serial.lock.locked = 1;   /* simula outro processo pegando o lock */
+
+    serial_print("[Serial] lock_serial travado!\r\n");
+    console_write_colored("[Serial] lock_serial travado!\n",
+                          CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
+
+    busy_delay();
+
+    /* Os dois tentam pegar o recurso do outro */
+    serial_print("\r\n[VGA]    Tentando lock_serial...\r\n");
+    serial_print("[Serial] Tentando lock_vga...\r\n");
+    serial_print("\r\n DEADLOCK: Os dois aguardam na fila infinitamente.\r\n");
+    serial_print("Kernel travou. Reset para sair.\r\n\r\n");
+
+    console_write_colored("\n[VGA] Tentando lock_serial...\n",
+                          CONSOLE_LIGHT_BROWN, CONSOLE_BLACK);
+    console_write_colored("[Serial] Tentando lock_vga...\n",
+                          CONSOLE_LIGHT_BROWN, CONSOLE_BLACK);
+
+    console_write_colored("\nDEADLOCK: Kernel travou.\n",
+                          CONSOLE_LIGHT_RED, CONSOLE_BLACK);
+    console_write_colored("Ctrl+Alt+Del para reiniciar.\n",
+                          CONSOLE_LIGHT_RED, CONSOLE_BLACK);
+
+    /*
+     * VGA tenta pegar lock_serial que está travado.
+     */
+    spin_lock(&file_serial.lock);
+
+    /* nunca chega aqui */
+    serial_print("OBS: essa mensagem não aparece!\r\n");
 }
 
 /*
- * Cenario 1: Sem hierarquia de travas
- * A execucao deste passo em ordem cruzada gera um bloqueio circular.
- * O processo VGA trava sua caixa e entra em espera pela caixa Serial.
- * O processo Serial trava a sua e entra em espera pela caixa VGA.
- * Como resultado, condicoes para progredir nunca mais ocorrerao.
+ * Simula dois usuários tentando realizar uma transferência ao mesmo tempo com hierarquia de locks.
  */
-
-static void demo_sem_hierarquia(void)
+void deadlock_demo_safe(void)
 {
-    spinlock_release(&caixa_vga);
-    spinlock_release(&caixa_serial);
+    /* limpa os locks */
+    file_vga.lock.locked    = 0;
+    file_serial.lock.locked = 0;
 
-    log_msg("\nCenario 1: Sem hierarquia de travas\n", CONSOLE_LIGHT_RED);
-    demo_delay();
+    serial_print("  TRANSFERENCIA SEGURA (hierarquia)\r\n");
 
-    log_msg("VGA: Lock Caixa_VGA... ", CONSOLE_LIGHT_CYAN);
-    spinlock_acquire(&caixa_vga);
-    log_msg("OK\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
+    console_write_colored("\nTRANSFERENCIA SEGURA\n",
+                          CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
+    console_write_colored("Regra: lock_vga sempre antes de lock_serial\n",
+                          CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
 
-    log_msg("Serial: Lock Caixa_Serial... ", CONSOLE_LIGHT_MAGENTA);
-    spinlock_acquire(&caixa_serial);
-    log_msg("OK\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
+    /* Pega lock_vga (1° na hierarquia) */
+    serial_print("[Seguro] Pegando lock_vga (1o)...\r\n");
+    console_write_colored("[Seguro] Pegando lock_vga...\n",
+                          CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
 
-    log_msg("VGA: Lock Caixa_Serial... ", CONSOLE_LIGHT_CYAN);
-    if (!spinlock_try_acquire(&caixa_serial)) {
-        log_msg("Bloqueado!\n", CONSOLE_LIGHT_RED);
-    }
-    demo_delay();
+    spin_lock(&file_vga.lock);
 
-    log_msg("Serial: Lock Caixa_VGA... ", CONSOLE_LIGHT_MAGENTA);
-    if (!spinlock_try_acquire(&caixa_vga)) {
-        log_msg("Bloqueado!\n", CONSOLE_LIGHT_RED);
-    }
-    demo_delay();
+    serial_print("[Seguro] lock_vga ok!\r\n");
+    console_write_colored("[Seguro] lock_vga ok!\n",
+                          CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
 
-    log_msg("\nErro: Deadlock detectado!\n", CONSOLE_LIGHT_RED);
-    log_msg("VGA aguarda Serial, e Serial aguarda VGA.\n\n", CONSOLE_LIGHT_RED);
+    busy_delay();
 
-    spinlock_release(&caixa_vga);
-    spinlock_release(&caixa_serial);
-}
+    /* Pega lock_serial (2° na hierarquia) */
+    serial_print("[Seguro] Pegando lock_serial (2o)...\r\n");
+    console_write_colored("[Seguro] Pegando lock_serial...\n",
+                          CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
 
-/*
- * Cenario 2: Com hierarquia de travas
- * A definicao de uma ordem global obrigatoria evita a dependencia circular.
- * Regra do Sistema: "A trava da Caixa_VGA deve ser solicitada primeiro."
- * O prmeiro processo que solicitar obtera as duas livremente, e o segundo 
- * entrara em espera na primeira verificacao, continuando apenas no final.
- */
+    spin_lock(&file_serial.lock);
 
-static void demo_com_hierarquia(void)
-{
-    spinlock_release(&caixa_vga);
-    spinlock_release(&caixa_serial);
+    serial_print("[Seguro] lock_serial ok!\r\n");
+    console_write_colored("[Seguro] lock_serial ok!\n",
+                          CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
 
-    log_msg("Cenario 2: Com hierarquia de travas\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
+    /* Faz a transferência (troca o conteúdo dos arquivos) */
+    serial_print("[Seguro] Transferindo dados...\r\n");
 
-    log_msg("VGA: Lock Caixa_VGA... ", CONSOLE_LIGHT_CYAN);
-    spinlock_acquire(&caixa_vga);
-    log_msg("OK\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
+    console_write_colored("[Seguro] Trocando: ",
+                          CONSOLE_WHITE, CONSOLE_BLACK);
+    console_write_colored(file_vga.data,
+                          CONSOLE_LIGHT_MAGENTA, CONSOLE_BLACK);
+    console_write_colored(" <-> ",
+                          CONSOLE_WHITE, CONSOLE_BLACK);
+    console_write_colored(file_serial.data,
+                          CONSOLE_LIGHT_MAGENTA, CONSOLE_BLACK);
+    console_write_colored("\n", CONSOLE_WHITE, CONSOLE_BLACK);
 
-    log_msg("Serial: Lock Caixa_VGA... ", CONSOLE_LIGHT_MAGENTA);
-    if (!spinlock_try_acquire(&caixa_vga)) {
-        log_msg("Aguardando liberacao...\n", CONSOLE_LIGHT_BROWN);
-    }
-    demo_delay();
+    /* Troca efetiva */
+    char tmp[64];
+    str_copy(tmp, file_vga.data, sizeof tmp);
+    str_copy(file_vga.data, file_serial.data, sizeof file_vga.data);
+    str_copy(file_serial.data, tmp, sizeof file_serial.data);
 
-    log_msg("VGA: Lock Caixa_Serial... ", CONSOLE_LIGHT_CYAN);
-    spinlock_acquire(&caixa_serial);
-    log_msg("OK\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
+    /* Libera os locks (ordem inversa) */
+    spin_unlock(&file_serial.lock);
+    spin_unlock(&file_vga.lock);
 
-    log_msg("VGA: Transferencia concluida\n", CONSOLE_LIGHT_CYAN);
-    spinlock_release(&caixa_serial);
-    spinlock_release(&caixa_vga);
-    demo_delay();
-
-    log_msg("Serial: Lock Caixa_VGA... ", CONSOLE_LIGHT_MAGENTA);
-    spinlock_acquire(&caixa_vga);
-    log_msg("OK\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
-
-    log_msg("Serial: Lock Caixa_Serial... ", CONSOLE_LIGHT_MAGENTA);
-    spinlock_acquire(&caixa_serial);
-    log_msg("OK\n", CONSOLE_LIGHT_GREEN);
-    demo_delay();
-
-    log_msg("Serial: Transferencia concluida\n", CONSOLE_LIGHT_MAGENTA);
-    spinlock_release(&caixa_serial);
-    spinlock_release(&caixa_vga);
-    demo_delay();
-
-    log_msg("\nSucesso: Hierarquia evitou o deadlock.\n\n", CONSOLE_LIGHT_GREEN);
-}
-
-/* Funcao para ser acessada no envio do chat */
-
-void deadlock_demo(void)
-{
-    log_msg("\nIniciando demonstracao de deadlock...\n", CONSOLE_WHITE);
-    demo_delay();
-
-    demo_sem_hierarquia();
-    demo_delay();
-
-    demo_com_hierarquia();
-
-    log_msg("Fim da demonstracao.\n\n", CONSOLE_WHITE);
+    serial_print("[Seguro] Locks liberados!\r\n\r\n");
+    console_write_colored("[Seguro] Sem deadlock.\n",
+                          CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
 }

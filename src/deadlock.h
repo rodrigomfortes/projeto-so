@@ -2,33 +2,24 @@
 #define DEADLOCK_H
 
 /*
- * Demonstração de Deadlock no Kernel
+ * Desafio de Deadlock — "transferência de arquivos" entre vga e serial.
  *
- * Simula transferência de arquivos entre dois usuários (VGA e Serial).
- * Cada transferência precisa travar a "caixa" de saída do remetente
- * e a "caixa" de entrada do destinatário.
+ * Cada usuário tem um recurso (tipo um arquivo) protegido por spinlock.
+ * Pra transferir entre dois, precisa travar o recurso dos dois.
+ * Se não seguir uma ordem fixa de trava, dá deadlock.
  *
- * Cenário 1 (SEM hierarquia): cada processo trava a própria caixa primeiro
- *   → ordem oposta → DEADLOCK
- *
- * Cenário 2 (COM hierarquia): ambos travam Caixa_VGA antes de Caixa_Serial
- *   → ordem fixa → sem deadlock
+ * Comandos:
+ *   /deadlock  — trava o kernel de propósito (sem hierarquia)
+ *   /transferir  — transferência segura (com hierarquia de locks)
  */
 
-/* Spinlock simples: flag + nome para log */
+/* Monta os recursos ("arquivos") de cada usuário */
+void deadlock_init(void);
 
-typedef struct {
-    volatile int locked;
-    const char  *name;
-} spinlock_t;
+/* Transferência SEM hierarquia — causa deadlock (spin infinito) */
+void deadlock_demo_unsafe(void);
 
-#define SPINLOCK_INIT(n) { 0, (n) }
-
-void spinlock_acquire(spinlock_t *lock);
-int  spinlock_try_acquire(spinlock_t *lock);
-void spinlock_release(spinlock_t *lock);
-
-/* Executa a demonstração completa (cenário 1 + cenário 2) */
-void deadlock_demo(void);
+/* Transferência COM hierarquia — funciona sem problema */
+void deadlock_demo_safe(void);
 
 #endif /* DEADLOCK_H */

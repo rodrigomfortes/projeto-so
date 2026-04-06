@@ -130,6 +130,8 @@ void kmain(unsigned int ebx)
                           CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
     console_write_colored("Enter envia a linha. Backspace apaga.\n",
                           CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
+    console_write_colored("Comandos: /transferir /deadlock\n",
+                          CONSOLE_LIGHT_BROWN, CONSOLE_BLACK);
 
     chat_init();
 

@@ -73,7 +73,17 @@ static int str_equal(const char *a, const char *b)
 static int chat_try_command(const char *line)
 {
     if (str_equal(line, "/deadlock")) {
-        deadlock_demo();
+        deadlock_demo_unsafe();
+        return 1;
+    }
+    if (str_equal(line, "/transferir")) {
+        deadlock_demo_safe();
+        return 1;
+    }
+    if (str_equal(line, "/help")) {
+        console_write_colored("\nComandos:\n", CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
+        console_write_colored("  /transferir  - troca de arquivos (com hierarquia)\n", CONSOLE_LIGHT_GREEN, CONSOLE_BLACK);
+        console_write_colored("  /deadlock  - provoca deadlock (trava tudo!)\n", CONSOLE_LIGHT_RED, CONSOLE_BLACK);
         return 1;
     }
     return 0;
@@ -87,6 +97,9 @@ void chat_init(void)
     kbd_line[0] = '\0';
     ser_len = 0;
     ser_line[0] = '\0';
+
+    /* Monta os "arquivos" pra demo do deadlock */
+    deadlock_init();
 }
 
 void chat_kbd_enqueue(unsigned char c)
