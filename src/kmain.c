@@ -126,7 +126,7 @@ void kmain(unsigned int ebx)
 
     serial_print("Modo chat do kernel (vga=teclado, serial=COM1).\n");
     console_write_colored("\n--- Chat no kernel ---\n", CONSOLE_LIGHT_CYAN, CONSOLE_BLACK);
-    console_write_colored("[vga] teclado na janela VGA  |  [serial] terminal host (QEMU: -serial stdio)\n",
+    console_write_colored("[vga] teclado na janela VGA  |  [serial] terminal host\n",
                           CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
     console_write_colored("Enter envia a linha. Backspace apaga.\n",
                           CONSOLE_LIGHT_GREY, CONSOLE_BLACK);
